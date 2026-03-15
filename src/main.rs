@@ -8,7 +8,9 @@ use std::path::Path;
 struct Image {
     pixels: Vec<u8>,
     width: u32,
-    height: u32
+    height: u32,
+    depth: u8
+    //Ignore colorType, compressionfilter, interlace
 }
 
 fn main() {
@@ -70,7 +72,8 @@ fn readPNG(bytes: &Vec<u8>) {
     let mut image = Image {
         pixels: vec![],
         width: 0,
-        height: 0
+        height: 0,
+        depth: 0
     };
 
     let mut i = 0;
@@ -82,13 +85,14 @@ fn readPNG(bytes: &Vec<u8>) {
 
         //Get chunk type
         chunkType = readSection(&mut i, 4, &imageBytes);
-
+        println!("{}", chunkType);
         match chunkType {
-            13 => { //IHDR
+            295 => { //IHDR
                 image.width = readSection(&mut i, 4, &imageBytes);
                 image.height = readSection(&mut i, 4, &imageBytes);
-                println!("{:?}", image);
-                exit(0);
+                image.depth = readSection(&mut i, 1, &imageBytes) as u8;
+                i += 4;
+                print!("{:?} x {:?}", image.width, image.height);
             },
             _ => {
                 //Skip unknown chunks
