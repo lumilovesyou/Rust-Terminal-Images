@@ -1,8 +1,10 @@
 #![allow(non_snake_case)]
 
-use std::{env, fs::read, ops::Deref, process::exit};
+use std::{env, fs::read, process::exit, vec};
+use flate2::read::ZlibDecoder; //Ewww gross a libraryyyyy >m<
 use file_type::FileType;
 use std::path::Path;
+use std::io::Read;
 
 
 #[derive(Debug)]
@@ -68,10 +70,10 @@ fn close(reason: &str) {
 }
 
 //There's probably a better way to do this than making two almost identical functions
-fn readSection(start: &mut usize, values: usize, list: &Vec<u8>) -> Vec<u32> {
+fn readSection(start: &mut usize, values: usize, list: &Vec<u8>) -> Vec<u8> {
     let mut total = vec![];
     for i in 0..values {
-        total.push(list[*start + i] as u32);
+        total.push(list[*start + i]);
     }
     *start += values;
     return total;
@@ -141,7 +143,13 @@ fn readPNG(bytes: &Vec<u8>) {
                 i += 4;
             },
             1229209940 => { //IDAT
-
+                //Decompresses the bytes. I am *not* writing a zlib decompressor by hand today
+                let bytesToDecode = readSection(&mut i, chunkLength as usize, &imageBytes);
+                let mut zlibDecoder = ZlibDecoder::new(&bytesToDecode[..]);
+                let mut decompressedBytes: Vec<u8> = vec![];
+                zlibDecoder.read_to_end(&mut decompressedBytes).unwrap();
+                println!("{:?}", decompressedBytes);
+                i += 4;
             },
             _ => {
                 //Skip unknown chunks

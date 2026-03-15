@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 file_type = "0.8.11"
+flate2 = "1.1.9"
