@@ -21,8 +21,9 @@ struct Image {
     width: u32,
     height: u32,
     depth: u8,
+    colourType: u8,
     colourSpace: u8, //No idea if I'll actually need this we'll see! ~~~~~~~~~~~~~~
-    //Ignore colourType, compressionfilter, interlace
+    //Ignore compressionfilter and interlace
     colourPalette: Vec<colourRGB>,
 }
 
@@ -82,7 +83,7 @@ fn readSection(start: &mut usize, values: usize, list: &Vec<u8>) -> Vec<u8> {
 fn readSectionMult(start: &mut usize, values: usize, list: &Vec<u8>) -> u32 {
     let mut total: u32 = 0;
     for i in 0..values {
-        total += (list[*start + i] as u32) << (8 * (3 - i));
+        total += (list[*start + i] as u32) << (8 * ((values - 1) - i));
     }
     *start += values;
     return total;
@@ -97,6 +98,7 @@ fn readPNG(bytes: &Vec<u8>) {
         width: 0,
         height: 0,
         depth: 0,
+        colourType: 0,
         colourSpace: 0,
         colourPalette: vec![],
     };
@@ -110,16 +112,20 @@ fn readPNG(bytes: &Vec<u8>) {
 
         //Get chunk type
         chunkType = readSectionMult(&mut i, 4, &imageBytes);
-        println!("{}", chunkType);
+        //println!("{}", chunkType); //~~~~~~~~~~~~~~
         match chunkType {
             1229472850 => { //IHDR
                 image.width = readSectionMult(&mut i, 4, &imageBytes);
                 image.height = readSectionMult(&mut i, 4, &imageBytes);
-                image.depth = readSectionMult(&mut i, 1, &imageBytes) as u8;
-                i += 8; //Skip unnecessary fields & checksum (criminal)
+                image.depth = readSection(&mut i, 1, &imageBytes)[0] as u8;
+                image.colourType = readSection(&mut i, 1, &imageBytes)[0] as u8;
+                println!("Size: {} x {}", image.width, image.height);
+                println!("Colourtype: {}\nDepth: {}", image.colourType, image.depth);
+                i += 7; //Skip unnecessary fields & checksum (criminal)
             },
             1934772034 => { //sRGB
-                image.colourSpace = readSectionMult(&mut i, 1, &imageBytes) as u8;
+                image.colourSpace = readSection(&mut i, 1, &imageBytes)[0] as u8;
+                println!("Colourspace: {}", image.colourSpace);
                 i += 4; //Skip checksum
             },
             1883789683 => { //pHYs
@@ -149,6 +155,13 @@ fn readPNG(bytes: &Vec<u8>) {
                 let mut decompressedBytes: Vec<u8> = vec![];
                 zlibDecoder.read_to_end(&mut decompressedBytes).unwrap();
                 println!("{:?}", decompressedBytes);
+
+                //Convert scan lines to pixels
+                let scanlineFilter = readSection(&mut i, 1, &imageBytes)[0] as u8;
+                for j in(0..image.height).step_by(image.depth as usize) {
+                    let pixelGroup = readSection(&mut i, image.depth as usize, &imageBytes);
+                }
+
                 i += 4;
             },
             _ => {
