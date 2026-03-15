@@ -4,13 +4,23 @@ use std::{env, fs::read, ops::Deref, process::exit};
 use file_type::FileType;
 use std::path::Path;
 
+
+#[derive(Debug)]
+struct colourRGB {
+    R: u8,
+    G: u8,
+    B: u8,
+}
+
 #[derive(Debug)]
 struct Image {
     pixels: Vec<u8>,
     width: u32,
     height: u32,
-    depth: u8
-    //Ignore colorType, compressionfilter, interlace
+    depth: u8,
+    colourSpace: u8, //No idea if I'll actually need this we'll see! ~~~~~~~~~~~~~~
+    //Ignore colourType, compressionfilter, interlace
+    colourPalette: Vec<colourRGB>,
 }
 
 fn main() {
@@ -56,10 +66,20 @@ fn close(reason: &str) {
     exit(0)
 }
 
-fn readSection(start: &mut usize, values: usize, list: &Vec<u8>) -> u32 {
+//There's probably a better way to do this than making two almost identical functions
+fn readSection(start: &mut usize, values: usize, list: &Vec<u8>) -> Vec<u32> {
+    let mut total = vec![];
+    for i in 0..values {
+        total.push(list[*start + i] as u32);
+    }
+    *start += values;
+    return total;
+}
+
+fn readSectionMult(start: &mut usize, values: usize, list: &Vec<u8>) -> u32 {
     let mut total: u32 = 0;
     for i in 0..values {
-        total = total + list[*start + i] as u32;
+        total += (list[*start + i] as u32) << (8 * (3 - i));
     }
     *start += values;
     return total;
@@ -73,26 +93,41 @@ fn readPNG(bytes: &Vec<u8>) {
         pixels: vec![],
         width: 0,
         height: 0,
-        depth: 0
+        depth: 0,
+        colourSpace: 0,
+        colourPalette: vec![],
     };
 
     let mut i = 0;
-    let mut chunkLength = 0;
-    let mut chunkType = 0;
+    let mut chunkLength;
+    let mut chunkType;
     while i < imageBytes.len() {
         //Get length of chunk
-        chunkLength = readSection(&mut i, 4, &imageBytes);
+        chunkLength = readSectionMult(&mut i, 4, &imageBytes);
 
         //Get chunk type
-        chunkType = readSection(&mut i, 4, &imageBytes);
-        println!("{}", chunkType);
+        chunkType = readSectionMult(&mut i, 4, &imageBytes);
         match chunkType {
-            295 => { //IHDR
-                image.width = readSection(&mut i, 4, &imageBytes);
-                image.height = readSection(&mut i, 4, &imageBytes);
-                image.depth = readSection(&mut i, 1, &imageBytes) as u8;
-                i += 4;
-                print!("{:?} x {:?}", image.width, image.height);
+            1229472850 => { //IHDR
+                image.width = readSectionMult(&mut i, 4, &imageBytes);
+                image.height = readSectionMult(&mut i, 4, &imageBytes);
+                image.depth = readSectionMult(&mut i, 1, &imageBytes) as u8;
+                i += 8; //Skip unnecessary fields & checksum (criminal)
+            },
+            1934772034 => { //sRGB
+                image.colourSpace = readSectionMult(&mut i, 1, &imageBytes) as u8;
+                i += 4; //Skip checksum
+            },
+            1883789683 => { //pHYs
+                //I don't think we need this...? I'll just skip it. Checksum included.
+                i += 13;
+            },
+            1347179589 => { //PLTE
+                for j in (0..chunkLength).step_by(3) {
+                    //Convert to the colour format
+                    let bytes = readSection(&mut i, 3, &imageBytes);
+                    image.colourPalette.push(colourRGB { R: bytes[0] as u8, G: bytes[1] as u8, B: bytes[2] as u8 });
+                }
             },
             _ => {
                 //Skip unknown chunks
