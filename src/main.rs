@@ -4,10 +4,11 @@ use std::{env, fs::read, ops::Deref, process::exit};
 use file_type::FileType;
 use std::path::Path;
 
+#[derive(Debug)]
 struct Image {
     pixels: Vec<u8>,
-    width: i32,
-    height: i32
+    width: u32,
+    height: u32
 }
 
 fn main() {
@@ -53,8 +54,46 @@ fn close(reason: &str) {
     exit(0)
 }
 
+fn readSection(start: &mut usize, values: usize, list: &Vec<u8>) -> u32 {
+    let mut total: u32 = 0;
+    for i in 0..values {
+        total = total + list[*start + i] as u32;
+    }
+    *start += values;
+    return total;
+}
+
 fn readPNG(bytes: &Vec<u8>) {
     //Removes PNG magic bytes
     let imageBytes = bytes.clone().split_off(8);
-    print!("{:?}", imageBytes);
+    
+    let mut image = Image {
+        pixels: vec![],
+        width: 0,
+        height: 0
+    };
+
+    let mut i = 0;
+    let mut chunkLength = 0;
+    let mut chunkType = 0;
+    while i < imageBytes.len() {
+        //Get length of chunk
+        chunkLength = readSection(&mut i, 4, &imageBytes);
+
+        //Get chunk type
+        chunkType = readSection(&mut i, 4, &imageBytes);
+
+        match chunkType {
+            13 => { //IHDR
+                image.width = readSection(&mut i, 4, &imageBytes);
+                image.height = readSection(&mut i, 4, &imageBytes);
+                println!("{:?}", image);
+                exit(0);
+            },
+            _ => {
+                //Skip unknown chunks
+                i += chunkLength as usize + 4;
+            }
+        }
+    }
 }
