@@ -1,14 +1,15 @@
 #![allow(non_snake_case)]
 
-use std::{env, fs::read, process::exit, vec};
+use std::collections::btree_map::Values;
+use std::{env, fmt, fs::read, process::exit, vec};
 use flate2::read::ZlibDecoder; //Ewww gross a libraryyyyy >m<
 use file_type::FileType;
 use std::path::Path;
 use std::io::Read;
 
 
-#[derive(Debug)]
-struct colourRGB {
+#[derive(Debug, Clone, Copy)]
+struct colourRGBA {
     R: u8,
     G: u8,
     B: u8,
@@ -17,14 +18,14 @@ struct colourRGB {
 
 #[derive(Debug)]
 struct Image {
-    pixels: Vec<u8>,
+    pixels: Vec<colourRGBA>,
     width: u32,
     height: u32,
     depth: u8,
     colourType: u8,
     colourSpace: u8, //No idea if I'll actually need this we'll see! ~~~~~~~~~~~~~~
     //Ignore compressionfilter and interlace
-    colourPalette: Vec<colourRGB>,
+    colourPalette: Vec<colourRGBA>,
 }
 
 fn main() {
@@ -89,6 +90,15 @@ fn readSectionMult(start: &mut usize, values: usize, list: &Vec<u8>) -> u32 {
     return total;
 }
 
+fn readSectionAdd(start: &mut usize, values: usize, list: &Vec<u8>) -> u32 {
+    let mut total: u32 = 0;
+    for i in 0..values {
+        total += list[*start + i] as u32;
+    }
+    *start += values;
+    return total;
+}
+
 fn readPNG(bytes: &Vec<u8>) {
     //Removes PNG magic bytes
     let imageBytes = bytes.clone().split_off(8);
@@ -117,14 +127,14 @@ fn readPNG(bytes: &Vec<u8>) {
             1229472850 => { //IHDR
                 image.width = readSectionMult(&mut i, 4, &imageBytes);
                 image.height = readSectionMult(&mut i, 4, &imageBytes);
-                image.depth = readSection(&mut i, 1, &imageBytes)[0] as u8;
-                image.colourType = readSection(&mut i, 1, &imageBytes)[0] as u8;
+                image.depth = readSectionMult(&mut i, 1, &imageBytes) as u8;
+                image.colourType = readSectionMult(&mut i, 1, &imageBytes) as u8;
                 println!("Size: {} x {}", image.width, image.height);
                 println!("Colourtype: {}\nDepth: {}", image.colourType, image.depth);
                 i += 7; //Skip unnecessary fields & checksum (criminal)
             },
             1934772034 => { //sRGB
-                image.colourSpace = readSection(&mut i, 1, &imageBytes)[0] as u8;
+                image.colourSpace = readSectionMult(&mut i, 1, &imageBytes) as u8;
                 println!("Colourspace: {}", image.colourSpace);
                 i += 4; //Skip checksum
             },
@@ -136,12 +146,12 @@ fn readPNG(bytes: &Vec<u8>) {
                 for j in (0..chunkLength).step_by(3) {
                     //Convert to the colour format
                     let bytes = readSection(&mut i, 3, &imageBytes);
-                    image.colourPalette.push(colourRGB { R: bytes[0] as u8, G: bytes[1] as u8, B: bytes[2] as u8, A: 255 });
+                    image.colourPalette.push(colourRGBA { R: bytes[0] as u8, G: bytes[1] as u8, B: bytes[2] as u8, A: 255 });
                 }
                 i += 4;
             },
             1951551059 => { //tRNS
-                for j in (0..chunkLength) {
+                for j in 0..chunkLength {
                     //Add alpha to colour format
                     let byte = readSection(&mut i, 1, &imageBytes);
                     image.colourPalette[j as usize].A = byte[0] as u8;
@@ -156,11 +166,24 @@ fn readPNG(bytes: &Vec<u8>) {
                 zlibDecoder.read_to_end(&mut decompressedBytes).unwrap();
                 println!("{:?}", decompressedBytes);
 
-                //Convert scan lines to pixels
-                let scanlineFilter = readSection(&mut i, 1, &imageBytes)[0] as u8;
-                for j in(0..image.height).step_by(image.depth as usize) {
-                    let pixelGroup = readSection(&mut i, image.depth as usize, &imageBytes);
+                let mut j = 0;
+                for k in 0..image.height {
+                    let lineFilter = readSectionAdd(&mut j, 1, &decompressedBytes) as u8;
+                    
+                    for l in 0..((image.width * image.depth as u32) + 7) / 8 {
+                        let byte = readSectionAdd(&mut j, 1, &decompressedBytes) as u8;
+
+                        for m in (0..8).step_by(image.depth as usize) {
+                            if m < image.width * image.depth as u32 {
+                                let shiftBy = 8 - image.depth - m as u8;
+                                let colourIndex = (byte >> shiftBy) & ((1 << image.depth) - 1); //Shift magic @w@
+                                image.pixels.push(image.colourPalette[colourIndex as usize])
+                            }
+                        }
+                    }
                 }
+
+                println!("{:?}", image.pixels);
 
                 i += 4;
             },
