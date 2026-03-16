@@ -1,18 +1,30 @@
 #![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 
 use std::{env, fs::read, process::exit, vec};
 use file_type::FileType;
 use std::path::Path;
 
 mod image_decoding;
-use image_decoding::{png::readPNG, image};
-
-use crate::image_decoding::image::Image;
+use image_decoding::png::readPNG;
+use image_decoding::image::{Image, colourRGBA};
 
 mod true_colour;
 
+fn printHelp() {
+    let helpText: [&str; 3] = [
+        "Options:",
+        "    -p, --path <PATH>  Path of image file",
+        "    -t, --tmcolour <TERMINAL COLOUR>  Colour used for alpha mixing [default: #000000]"];
+    for i in 0..helpText.len() {
+        println!("{}", helpText[i]);
+    }
+    exit(0);
+}
+
 fn main() {
     let mut path = "";
+    let mut termBgColour = colourRGBA::default();
 
     //Get input arguments
     let mut args: Vec<String> = env::args().collect();
@@ -22,7 +34,30 @@ fn main() {
     if args.len() == 0 {
         close("No path provided!")
     } else {
-        path = args[args.len() - 1].as_str();
+        let mut i = 0;
+        while i < args.len() {
+            match args[i].as_str() {
+                "path" | "--path" | "-p" => if args.len() > i + 1 {
+                    i += 1;
+                    path = args[i].as_str();
+                },
+                "tmcolour" | "--tmcolour" | "-t" => if args.len() > i + 1 {
+                    i += 1;
+                    termBgColour = true_colour::hexToRGB(args[i].clone());
+                    println!("{:?}", termBgColour);
+                },
+                "help" | "--help" | "-h" => printHelp(),
+                _ => {
+                    if i == args.len() - 1 {
+                        path = args[i].as_str();
+                    } else {
+                        close(format!("Invalid argument: \"{}\"", args[i]).as_str())
+                    }
+                }
+            }
+
+            i += 1;
+        }
     }
 
     //Check whether value exists
@@ -64,7 +99,7 @@ fn main() {
     let mut imageString = String::new();
     for i in 0..image.height {
         for j in 0..image.width {
-            imageString = format!("{}{}", imageString, true_colour::makeColoured("██", image.pixels[((i * image.width)+j) as usize]))
+            imageString = format!("{}{}", imageString, true_colour::makeColoured("██", image.pixels[((i * image.width)+j) as usize], termBgColour))
         }
         imageString = format!("{}\n", imageString);
     }

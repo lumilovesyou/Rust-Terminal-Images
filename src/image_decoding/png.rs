@@ -1,6 +1,6 @@
 use flate2::read::ZlibDecoder; //Ewww gross a libraryyyyy >m<
 use std::io::Read;
-use crate::image::{Image, colourRGBA};
+use super::image::{Image, colourRGBA};
 
 fn readU8(position: &mut usize, list: &Vec<u8>) -> u8 {
     let num = list[*position];

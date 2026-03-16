@@ -6,6 +6,12 @@ pub struct colourRGBA {
     pub A: u8,
 }
 
+impl Default for colourRGBA {
+    fn default() -> Self {
+        colourRGBA { R: 0, G: 0, B: 0, A: 255 }
+    }
+}
+
 #[derive(Debug)]
 pub struct Image {
     pub pixels: Vec<colourRGBA>,
