@@ -15,7 +15,7 @@ fn readU32(position: &mut usize, list: &Vec<u8>) -> u32 {
 }
 
 fn readVec(position: &mut usize, values: usize, list: &Vec<u8>) -> Vec<u8> {
-    let num = list[*position..*position + 4].to_vec();
+    let num = list[*position..*position + values].to_vec();
     *position += values;
     return num;
 }
@@ -87,7 +87,6 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
         }
     }
 
-    println!("IDAT CHUNKS: {:?}", idatChunks);
     //Decompresses the bytes. I am *not* writing a zlib decompressor by hand today
     let mut zlibDecoder = ZlibDecoder::new(&idatChunks[..]);
     let mut decompressedBytes: Vec<u8> = vec![];

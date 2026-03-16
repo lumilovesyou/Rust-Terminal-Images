@@ -9,6 +9,9 @@ use image_decoding::{png::readPNG, image};
 
 use crate::image_decoding::image::Image;
 
+mod true_colour;
+use true_colour::print;
+
 fn main() {
     let mut path = "";
 
@@ -54,7 +57,14 @@ fn main() {
         //Might add JPEG/JPG and WEBP. Maybe. Probably not.
         _ => close("Filetype isn't PNG!")
     }
-    println!("{:?}", image);
+
+    if image.pixels.len() == 0 {
+        close("Failed to decode image!");
+    }
+
+    for i in image.pixels {
+        print("██", i);
+    }
 }
 
 fn close(reason: &str) {
@@ -62,3 +72,5 @@ fn close(reason: &str) {
     print!("{}", reason);
     exit(0)
 }
+
+
