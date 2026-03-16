@@ -10,7 +10,6 @@ use image_decoding::{png::readPNG, image};
 use crate::image_decoding::image::Image;
 
 mod true_colour;
-use true_colour::print;
 
 fn main() {
     let mut path = "";
@@ -62,9 +61,14 @@ fn main() {
         close("Failed to decode image!");
     }
 
-    for i in image.pixels {
-        print("██", i);
+    let mut imageString = String::new();
+    for i in 0..image.height {
+        for j in 0..image.width {
+            imageString = format!("{}{}", imageString, true_colour::makeColoured("██", image.pixels[((i * image.width)+j) as usize]))
+        }
+        imageString = format!("{}\n", imageString);
     }
+    println!("{}", imageString);
 }
 
 fn close(reason: &str) {
