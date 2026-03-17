@@ -42,6 +42,7 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
 
         //Get chunk type
         chunkType = readU32(&mut i, &imageBytes);
+        println!("Chunk: {}, Length: {}, i: {}", chunkType, chunkLength, i);
         match chunkType {
             //Maybe use something like b"IHDR" to make this more readable? ~~~~~~~~~~~~~~
             1229472850 => { //IHDR
@@ -54,6 +55,19 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
             1934772034 => { //sRGB
                 image.colourSpace = readU8(&mut i, &imageBytes);
                 i += 4; //Skip checksum
+            },
+            1766015824 => { //iCCP
+                //Uhm... uhhh... probably remove this because I don't feel like dealing with more than one profile anyways so there's no need to get the name. it should jsut go to the null byte ~~~~~~~~~~~~~~
+                let mut iccpNameBytes: Vec<u8> = vec![];
+                let mut j = 0;
+                while imageBytes[i] != 0 {
+                    iccpNameBytes.push(readU8(&mut i, &imageBytes));
+                    j += 1;
+                };
+                i += 2;
+                let mut iccpDataBytes: Vec<u8> = readVec(&mut i, chunkLength - j, &imageBytes);
+                //Decompress this then push to image colour palette (yes technically not the best place to put it but shut up >~<)
+                i += 4;
             },
             1883789683 => { //pHYs
                 //I don't think we need this...? I'll just skip it. Checksum included.
@@ -82,8 +96,10 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
             },
             _ => {
                 //Skip unknown/unnecessary chunks
+                //IEND included
                 i += chunkLength + 4;
             }
+            //Probably a better idea to throw the i+=4 to skip the chunk down here instead of it being repeated so many times ~~~~~~~~~~~~~~
         }
     }
 
@@ -91,6 +107,8 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
     let mut zlibDecoder = ZlibDecoder::new(&idatChunks[..]);
     let mut decompressedBytes: Vec<u8> = vec![];
     zlibDecoder.read_to_end(&mut decompressedBytes).unwrap();
+
+    println!("Let's see if it works!! {:?}", image.colourPalette);
 
     let mut i = 0;
     for _ in 0..image.height {
@@ -111,3 +129,37 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
 
     return image;
 }
+
+/* Chunks to-do:
+
+Critical chunks [✓]
+    IHDR Image header ✓
+    PLTE Palette ✓
+    IDAT Image data ✓
+    IEND Image trailer ✓
+
+Ancillary chunks [ ]
+    Transparency information [✓]
+        tRNS Transparency ✓
+    Color space information [ ]
+        gAMA Image gamma
+        cHRM Primary chromaticities
+        sRGB Standard RGB color space ✓
+        iCCP Embedded ICC profile 
+    Textual information [ ]
+        tEXt Textual data
+        zTXt Compressed textual data
+        iTXt International textual data 
+    Miscellaneous information [ ]
+        bKGD Background color
+        pHYs Physical pixel dimensions ✓
+        sBIT Significant bits
+        sPLT Suggested palette
+        hIST Palette histogram
+        tIME Image last-modification time
+
+Other to-do:
+
+Replace file recognizer library with just magic byte checks
+Find a better way to represent chunk ids in code //On that note I'm dumb and apparently each chunk id is actually the ascii character representation, so there you go
+*/
