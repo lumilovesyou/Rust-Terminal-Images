@@ -40,6 +40,8 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
         //Get length of chunk
         chunkLength = readU32(&mut i, &imageBytes) as usize;
 
+        println!("{} {} {} {}", imageBytes[i],  imageBytes[i + 1],  imageBytes[i + 2],  imageBytes[i + 3]);
+
         //Get chunk type
         chunkType = readU32(&mut i, &imageBytes);
         println!("Chunk: {}, Length: {}, i: {}", chunkType, chunkLength, i);
@@ -60,9 +62,21 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
                 //Turns out I don't need this if I don't care about colour accuracy. Yibbeee!!! :333 ~~~~~~~~~~~~~~
                 i += 4 + chunkLength;
             },
+            1649100612 => { //bKGD
+                //Official PNG documentation says you don't need to honor this so skipped it is!
+                i += 4 + chunkLength;
+            }
             1883789683 => { //pHYs
                 //I don't think we need this...? I'll just skip it. Checksum included.
-                i += 13;
+                i += 4 + chunkLength;
+            },
+            1950960965 => { //tIME
+                //Skip this one because it's just metadata we don't need
+                i += 4 + chunkLength;
+            },
+            1950701684 => { //tEXt
+                //Skip this one because it's just metadata we don't need
+                i += 4 + chunkLength;
             },
             1347179589 => { //PLTE
                 for _ in (0..chunkLength).step_by(3) {
@@ -93,6 +107,8 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
             //Probably a better idea to throw the i+=4 to skip the chunk down here instead of it being repeated so many times ~~~~~~~~~~~~~~
         }
     }
+
+    println!("Colour type: {}", image.colourType);
 
     //Decompresses the bytes. I am *not* writing a zlib decompressor by hand today
     let mut zlibDecoder = ZlibDecoder::new(&idatChunks[..]);

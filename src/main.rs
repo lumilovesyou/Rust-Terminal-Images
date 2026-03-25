@@ -77,15 +77,7 @@ fn main() {
     let fileType = FileType::from_bytes(&fileBytes).media_types().first().copied().unwrap();
 
     //Matches supported file types to read functions
-    let mut image = Image {
-        pixels: vec![],
-        width: 0,
-        height: 0,
-        depth: 0,
-        colourType: 0,
-        colourSpace: 0,
-        colourPalette: vec![],
-    };
+    let mut image = Image::default();
     match fileType {
         "image/png" => image = readPNG(&fileBytes), //89, 50, 4E, 47, 0D, 0A, 1A, 0A
         //Might add JPEG/JPG and WEBP. Maybe. Probably not.

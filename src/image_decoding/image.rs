@@ -23,3 +23,9 @@ pub struct Image {
     //Ignore compressionfilter and interlace
     pub colourPalette: Vec<colourRGBA>,
 }
+
+impl Default for Image {
+    fn default() -> Self {
+        Image { pixels: vec![], width: 0, height: 0, depth: 0, colourType: 0, colourSpace: 0, colourPalette: vec![] }
+    }
+}
