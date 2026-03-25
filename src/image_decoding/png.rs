@@ -21,16 +21,15 @@ fn readVec(position: &mut usize, values: usize, list: &Vec<u8>) -> Vec<u8> {
     return num;
 }
 
+fn applyGamma(image: &Image, value: u8) -> u8 {
+    if image.gamma != -1.0 {
+        return ((value as f32 / 255.0).powf(image.gamma) * 255.0) as u8;
+    }
+    return value;
+}
+
 pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
-    let mut image = Image {
-        pixels: vec![],
-        width: 0,
-        height: 0,
-        depth: 0,
-        colourType: 0,
-        colourSpace: 0,
-        colourPalette: vec![],
-    };
+    let mut image = Image::default();
 
     let mut i = 8; //Starts at eight to skip magic bytes
     let mut chunkLength;
@@ -43,6 +42,9 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
 
         //Get chunk type
         chunkType = readU32(&mut i, &imageBytes);
+
+        println!("Chunk type: {}\n{}{}{}{}", chunkType, imageBytes[i - 4] as char, imageBytes[i - 3] as char, imageBytes[i - 2] as char, imageBytes[i - 1] as char);
+
         match chunkType {
             //Maybe use something like b"IHDR" to make this more readable? ~~~~~~~~~~~~~~
             1229472850 => { //IHDR
@@ -51,6 +53,9 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
                 image.depth = readU8(&mut i, &imageBytes);
                 image.colourType = readU8(&mut i, &imageBytes);
                 i += 3; //Skip unnecessary fields
+            },
+            1732332865 => { //gAMA
+                image.gamma = readU32(&mut i, &imageBytes) as f32 / 100000.0;
             },
             1934772034 => { //sRGB
                 image.colourSpace = readU8(&mut i, &imageBytes);
@@ -89,11 +94,16 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
     let mut decompressedBytes: Vec<u8> = vec![];
     zlibDecoder.read_to_end(&mut decompressedBytes).unwrap();
 
+    println!("Colour type: {}", image.colourType);
+
     let mut i = 0;
     for _ in 0..image.height {
         let lineFilter = readU8(&mut i, &decompressedBytes);
     
         match image.colourType {
+            0 => {
+                //Greyscale next!
+            },
             3 => {
                 for _ in 0..((image.width * image.depth as u32) + 7) / 8 {
                 let byte = readU8(&mut i, &decompressedBytes);
@@ -109,7 +119,7 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
             },
             2 | 6 => {
                 for j in 0..image.width {
-                    let mut colour = colourRGBA { R: readU8(&mut i, &decompressedBytes), G: readU8(&mut i, &decompressedBytes), B: readU8(&mut i, &decompressedBytes), A: if (image.colourType == 6) { readU8(&mut i, &decompressedBytes) } else { 255 } };
+                    let mut colour = colourRGBA { R: readU8(&mut i, &decompressedBytes), G: readU8(&mut i, &decompressedBytes), B: readU8(&mut i, &decompressedBytes), A: if image.colourType == 6 { readU8(&mut i, &decompressedBytes) } else { 255 } };
                     
                     match lineFilter {
                         1 => {
@@ -128,6 +138,8 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
                         },
                         _ => {},
                     }
+
+                    colour = colour.map(|v| applyGamma(&image, v));
                     image.pixels.push(colour);
                 }
             },
