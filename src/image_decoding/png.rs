@@ -57,17 +57,8 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
                 i += 4; //Skip checksum
             },
             1766015824 => { //iCCP
-                //Uhm... uhhh... probably remove this because I don't feel like dealing with more than one profile anyways so there's no need to get the name. it should jsut go to the null byte ~~~~~~~~~~~~~~
-                let mut iccpNameBytes: Vec<u8> = vec![];
-                let mut j = 0;
-                while imageBytes[i] != 0 {
-                    iccpNameBytes.push(readU8(&mut i, &imageBytes));
-                    j += 1;
-                };
-                i += 2;
-                let mut iccpDataBytes: Vec<u8> = readVec(&mut i, chunkLength - j, &imageBytes);
-                //Decompress this then push to image colour palette (yes technically not the best place to put it but shut up >~<)
-                i += 4;
+                //Turns out I don't need this if I don't care about colour accuracy. Yibbeee!!! :333 ~~~~~~~~~~~~~~
+                i += 4 + chunkLength;
             },
             1883789683 => { //pHYs
                 //I don't think we need this...? I'll just skip it. Checksum included.
