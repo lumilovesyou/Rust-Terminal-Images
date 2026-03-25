@@ -1,5 +1,6 @@
 use flate2::read::ZlibDecoder; //Ewww gross a libraryyyyy >m<
 use std::io::Read;
+use std::num::Wrapping;
 use super::image::{Image, colourRGBA};
 
 fn readU8(position: &mut usize, list: &Vec<u8>) -> u8 {
@@ -40,11 +41,8 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
         //Get length of chunk
         chunkLength = readU32(&mut i, &imageBytes) as usize;
 
-        println!("{} {} {} {}", imageBytes[i],  imageBytes[i + 1],  imageBytes[i + 2],  imageBytes[i + 3]);
-
         //Get chunk type
         chunkType = readU32(&mut i, &imageBytes);
-        println!("Chunk: {}, Length: {}, i: {}", chunkType, chunkLength, i);
         match chunkType {
             //Maybe use something like b"IHDR" to make this more readable? ~~~~~~~~~~~~~~
             1229472850 => { //IHDR
@@ -52,31 +50,10 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
                 image.height = readU32(&mut i, &imageBytes);
                 image.depth = readU8(&mut i, &imageBytes);
                 image.colourType = readU8(&mut i, &imageBytes);
-                i += 7; //Skip unnecessary fields & checksum (criminal)
+                i += 3; //Skip unnecessary fields
             },
             1934772034 => { //sRGB
                 image.colourSpace = readU8(&mut i, &imageBytes);
-                i += 4; //Skip checksum
-            },
-            1766015824 => { //iCCP
-                //Turns out I don't need this if I don't care about colour accuracy. Yibbeee!!! :333 ~~~~~~~~~~~~~~
-                i += 4 + chunkLength;
-            },
-            1649100612 => { //bKGD
-                //Official PNG documentation says you don't need to honor this so skipped it is!
-                i += 4 + chunkLength;
-            }
-            1883789683 => { //pHYs
-                //I don't think we need this...? I'll just skip it. Checksum included.
-                i += 4 + chunkLength;
-            },
-            1950960965 => { //tIME
-                //Skip this one because it's just metadata we don't need
-                i += 4 + chunkLength;
-            },
-            1950701684 => { //tEXt
-                //Skip this one because it's just metadata we don't need
-                i += 4 + chunkLength;
             },
             1347179589 => { //PLTE
                 for _ in (0..chunkLength).step_by(3) {
@@ -84,7 +61,6 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
                     let bytes = readVec(&mut i, 3, &imageBytes);
                     image.colourPalette.push(colourRGBA { R: bytes[0] as u8, G: bytes[1] as u8, B: bytes[2] as u8, A: 255 });
                 }
-                i += 4;
             },
             1951551059 => { //tRNS
                 for j in 0..chunkLength {
@@ -92,45 +68,70 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
                     let byte = readVec(&mut i, 1, &imageBytes);
                     image.colourPalette[j as usize].A = byte[0] as u8;
                 }
-                i += 4;
             },
             1229209940 => { //IDAT
                 //Adds all the pixel values to a list to later be processed
                 idatChunks.extend(readVec(&mut i, chunkLength, &imageBytes));
-                i += 4;
             },
             _ => {
                 //Skip unknown/unnecessary chunks
-                //IEND included
-                i += chunkLength + 4;
+                //IEND - Skipped because no data is contained
+                //tEXt, zTXt, iTXt, tIME, pHYs - Skipped because they're just metadata
+                //bKGD - Skipped because I already implement a background colour system
+                //iCCP - Skipped because I don't want to deal with colour profiles
+                i += chunkLength;
             }
-            //Probably a better idea to throw the i+=4 to skip the chunk down here instead of it being repeated so many times ~~~~~~~~~~~~~~
         }
+        i += 4; //Skip checksum (criminal)
     }
-
-    println!("Colour type: {}", image.colourType);
-
     //Decompresses the bytes. I am *not* writing a zlib decompressor by hand today
     let mut zlibDecoder = ZlibDecoder::new(&idatChunks[..]);
     let mut decompressedBytes: Vec<u8> = vec![];
     zlibDecoder.read_to_end(&mut decompressedBytes).unwrap();
 
-    println!("Let's see if it works!! {:?}", image.colourPalette);
-
     let mut i = 0;
     for _ in 0..image.height {
-        let _lineFilter = readU8(&mut i, &decompressedBytes); //Not needed right now
-        
-        for _ in 0..((image.width * image.depth as u32) + 7) / 8 {
-            let byte = readU8(&mut i, &decompressedBytes);
+        let lineFilter = readU8(&mut i, &decompressedBytes);
+    
+        match image.colourType {
+            3 => {
+                for _ in 0..((image.width * image.depth as u32) + 7) / 8 {
+                let byte = readU8(&mut i, &decompressedBytes);
 
-            for j in (0..8).step_by(image.depth as usize) {
-                if j < image.width * image.depth as u32 { //To-do: limit loop length instead of checking each loop ~~~~~~~~~~~~~~
-                    let shiftBy = 8 - image.depth - j as u8;
-                    let colourIndex = (byte >> shiftBy) & ((1 << image.depth) - 1); //Shift magic @w@
-                    image.pixels.push(image.colourPalette[colourIndex as usize])
+                for j in (0..8).step_by(image.depth as usize) {
+                    if j < image.width * image.depth as u32 { //To-do: limit loop length instead of checking each loop ~~~~~~~~~~~~~~
+                        let shiftBy = 8 - image.depth - j as u8;
+                        let colourIndex = (byte >> shiftBy) & ((1 << image.depth) - 1); //Shift magic @w@
+                        image.pixels.push(image.colourPalette[colourIndex as usize]);
+                    }
                 }
             }
+            },
+            2 | 6 => {
+                for j in 0..image.width {
+                    let mut colour = colourRGBA { R: readU8(&mut i, &decompressedBytes), G: readU8(&mut i, &decompressedBytes), B: readU8(&mut i, &decompressedBytes), A: if (image.colourType == 6) { readU8(&mut i, &decompressedBytes) } else { 255 } };
+                    
+                    match lineFilter {
+                        1 => {
+                            if j != 0 {
+                                colour.R = (Wrapping(colour.R) + Wrapping(image.pixels[image.pixels.len() - 1].R)).0;
+                                colour.G = (Wrapping(colour.G) + Wrapping(image.pixels[image.pixels.len() - 1].G)).0;
+                                colour.B = (Wrapping(colour.B) + Wrapping(image.pixels[image.pixels.len() - 1].B)).0;
+                                colour.A = (Wrapping(colour.A) + Wrapping(image.pixels[image.pixels.len() - 1].A)).0;
+                            }
+                        },
+                        2 => {
+                            colour.R = (Wrapping(colour.R) + Wrapping(image.pixels[image.pixels.len() - image.width as usize].R)).0;
+                            colour.G = (Wrapping(colour.G) + Wrapping(image.pixels[image.pixels.len() - image.width as usize].G)).0;
+                            colour.B = (Wrapping(colour.B) + Wrapping(image.pixels[image.pixels.len() - image.width as usize].B)).0;
+                            colour.A = (Wrapping(colour.A) + Wrapping(image.pixels[image.pixels.len() - image.width as usize].A)).0;
+                        },
+                        _ => {},
+                    }
+                    image.pixels.push(colour);
+                }
+            },
+            _ => {},
         }
     }
 
@@ -152,21 +153,20 @@ Ancillary chunks [ ]
         gAMA Image gamma
         cHRM Primary chromaticities
         sRGB Standard RGB color space ✓
-        iCCP Embedded ICC profile 
-    Textual information [ ]
-        tEXt Textual data
-        zTXt Compressed textual data
-        iTXt International textual data 
+        iCCP Embedded ICC profile ✓
+    Textual information [✓]
+        tEXt Textual data ✓
+        zTXt Compressed textual data ✓
+        iTXt International textual data  ✓
     Miscellaneous information [ ]
-        bKGD Background color
+        bKGD Background color ✓
         pHYs Physical pixel dimensions ✓
         sBIT Significant bits
         sPLT Suggested palette
         hIST Palette histogram
-        tIME Image last-modification time
+        tIME Image last-modification time ✓
 
 Other to-do:
-
 Replace file recognizer library with just magic byte checks
 Find a better way to represent chunk ids in code //On that note I'm dumb and apparently each chunk id is actually the ascii character representation, so there you go
 */
