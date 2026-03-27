@@ -94,28 +94,43 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
     let mut decompressedBytes: Vec<u8> = vec![];
     zlibDecoder.read_to_end(&mut decompressedBytes).unwrap();
 
+    println!("Image size: {}x{}", image.width, image.height);
     println!("Colour type: {}", image.colourType);
+    println!("Depth: {}", image.depth);
 
     let mut i = 0;
     for _ in 0..image.height {
         let lineFilter = readU8(&mut i, &decompressedBytes);
+
+        println!("Line filter: {}", lineFilter);
     
         match image.colourType {
             0 => {
-                //Greyscale next!
+                for _ in 0..((image.width * image.depth as u32) + 7) / 8 {
+                    let byte = readU8(&mut i, &decompressedBytes);
+
+                    for j in (0..8).step_by(image.depth as usize) {
+                        if j < image.width * image.depth as u32 { //To-do: limit loop length instead of checking each loop ~~~~~~~~~~~~~~
+                            let shiftBy = 8 - image.depth - j as u8;
+                            let greyscaleValue = (byte >> shiftBy) & ((1 << image.depth) - 1); //Shift magic @w@
+                            let scaled = (greyscaleValue as u32 * 255 / ((1u32 << image.depth) - 1)) as u8;
+                            image.pixels.push(colourRGBA::default().greyscale(scaled));
+                        }
+                    }
+                }
             },
             3 => {
                 for _ in 0..((image.width * image.depth as u32) + 7) / 8 {
-                let byte = readU8(&mut i, &decompressedBytes);
+                    let byte = readU8(&mut i, &decompressedBytes);
 
-                for j in (0..8).step_by(image.depth as usize) {
-                    if j < image.width * image.depth as u32 { //To-do: limit loop length instead of checking each loop ~~~~~~~~~~~~~~
-                        let shiftBy = 8 - image.depth - j as u8;
-                        let colourIndex = (byte >> shiftBy) & ((1 << image.depth) - 1); //Shift magic @w@
-                        image.pixels.push(image.colourPalette[colourIndex as usize]);
+                    for j in (0..8).step_by(image.depth as usize) {
+                        if j < image.width * image.depth as u32 { //To-do: limit loop length instead of checking each loop ~~~~~~~~~~~~~~
+                            let shiftBy = 8 - image.depth - j as u8;
+                            let colourIndex = (byte >> shiftBy) & ((1 << image.depth) - 1); //Shift magic @w@
+                            image.pixels.push(image.colourPalette[colourIndex as usize]);
+                        }
                     }
                 }
-            }
             },
             2 | 6 => {
                 for j in 0..image.width {
@@ -124,6 +139,7 @@ pub fn readPNG(imageBytes: &Vec<u8>) -> Image {
                     match lineFilter {
                         1 => {
                             if j != 0 {
+                                //Turn this into an impl because it's ugly and I pretend code in image.rs doesn't exist :{ ~~~~~~~~~~~~~~
                                 colour.R = (Wrapping(colour.R) + Wrapping(image.pixels[image.pixels.len() - 1].R)).0;
                                 colour.G = (Wrapping(colour.G) + Wrapping(image.pixels[image.pixels.len() - 1].G)).0;
                                 colour.B = (Wrapping(colour.B) + Wrapping(image.pixels[image.pixels.len() - 1].B)).0;

@@ -21,6 +21,15 @@ impl colourRGBA {
             A: self.A,
         }
     }
+
+    pub fn greyscale(&self, f: u8) -> colourRGBA {
+        colourRGBA {
+            R: f,
+            G: f,
+            B: f,
+            A: self.A,
+        }
+    }
 }
 
 #[derive(Debug)]
