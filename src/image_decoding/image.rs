@@ -41,12 +41,13 @@ pub struct Image {
     pub gamma: f32,
     pub colourType: u8,
     pub colourSpace: u8, //No idea if I'll actually need this we'll see! ~~~~~~~~~~~~~~
-    //Ignore compressionfilter and interlace
+    //Ignore compressionfilter and filter
     pub colourPalette: Vec<colourRGBA>,
+    pub interlace: u8, 
 }
 
 impl Default for Image {
     fn default() -> Self {
-        Image { pixels: vec![], width: 0, height: 0, depth: 0, gamma: -1.0, colourType: 0, colourSpace: 0, colourPalette: vec![] }
+        Image { pixels: vec![], width: 0, height: 0, depth: 0, gamma: -1.0, colourType: 0, colourSpace: 0, colourPalette: vec![], interlace: 0 }
     }
 }
