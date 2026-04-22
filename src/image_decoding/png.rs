@@ -51,7 +51,7 @@ fn decodeRows(image: &Image, decompressedBytes: &Vec<u8>, i: &mut usize, width: 
         println!("Line filter: {}", lineFilter);
     
         match image.colourType {
-            0 => { //None    
+            0 => { //Greyscale
                 if image.depth == 8 {
                     for j in 0..width {
                         let mut value = readU8(i, decompressedBytes);
@@ -82,7 +82,7 @@ fn decodeRows(image: &Image, decompressedBytes: &Vec<u8>, i: &mut usize, width: 
                     }
                 }
             },
-            3 => { //Sub
+            3 => { //Indexed/Palette
                 if image.depth == 8 {
                     for _ in 0..width {
                         let byte = readU8(i, decompressedBytes);
@@ -102,7 +102,7 @@ fn decodeRows(image: &Image, decompressedBytes: &Vec<u8>, i: &mut usize, width: 
                     }
                 }
             },
-            2 | 6 => { //Up
+            2 | 6 => { //RGB / RGBA
                 for j in 0..width {
                     let mut colour = colourRGBA { R: readU8(i, &decompressedBytes), G: readU8(i, &decompressedBytes), B: readU8(i, &decompressedBytes), A: if image.colourType == 6 { readU8(i, &decompressedBytes) } else { 255 } };
                     
